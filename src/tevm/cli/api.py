@@ -1,18 +1,31 @@
-from typing import Literal
+from typing import Literal, Callable
 from os.path import exists as Path_Exists, isabs as Path_IsABS, normpath as Path_NormPath
-from ..instance import Projects as PROJECTS, Path_ConfigProjects, Root_BatScripts
-from ..lib.config_rw import json_write
-from ..lib.scripter import bat_build
-from ..lib.func.function import os_remove, ColorPrint as CP
+from ..instance import (
+    Projects as PROJECTS,
+    Path_ConfigProjects,
+    Path_CallFrom,
+    Root_BatScripts,
+    # Path_Python,
+    # Root_TEVM,
+    # Root_Recipes
+)
+from ..lib.func import file_remove, check_prjname, input
+from ..lib.core import Projecter, Scripter, Reciper
+from ..lib import Json
+from pylucas.basic import Result
+from pylucas.better_print import CPrint
 
 def Execute(): pass
 def __help__(): pass
-def __gui__(): pass
+def __run__(): pass
+def __recipe__(): pass
+def __recipe_run__(): pass
+def __recipe_list__(): pass
 def __project__(): pass
 def __project_gui__(): pass
 def __project_list__(): pass
 def __project_new__(): pass
-def __project_del__(): pass
+def __project_rem__(): pass
 def __project_modify__(): pass
 def __show__(): pass
 
@@ -24,8 +37,52 @@ CMDS: dict[str, dict[str]] = {
             "sub": {},
             "call": __help__
         },
+        "run": {
+            "description": "run the project.",
+            "sub": {
+                "--name": {
+                    "description": "Name Of Project.",
+                    "sub": {},
+                    "call": None
+                }
+            },
+            "call": __run__
+        },
+        "recipe": {
+            "description": "run the project.",
+            "sub": {
+                "run": {
+                    "description": "Run Target Recipe.",
+                    "sub": {
+                        "--name": {
+                            "description": "Name Of Project.",
+                            "sub": {},
+                            "call": None
+                        },
+                    },
+                    "call": __recipe_run__
+                },
+                "list": {
+                    "description": "List All Recipe.",
+                    "sub": {
+                        "-name": {
+                            "description": "List All Recipe Name.",
+                            "sub": {},
+                            "call": None
+                        },
+                        "-info": {
+                            "description": "List All Recipe Info.",
+                            "sub": {},
+                            "call": None
+                        }
+                    },
+                    "call": __recipe_list__
+                }
+            },
+            "call": __run__
+        },
         "project": {
-            "description": "Project Projects With TEVM.",
+            "description": "Project Projects With TEVM, Additionally, \"prj\" Is Also A Supported Command.",
             "sub": {
                 "gui": {
                     "description": "A Web GUI For User To Project.",
@@ -39,8 +96,14 @@ CMDS: dict[str, dict[str]] = {
                     "call": __project_gui__
                 },
                 "list": {
-                    "description": "List All Project.",
-                    "sub": {},
+                    "description": "List All Project, Default With \"-name\" Mode.",
+                    "sub": {
+                        "-name": {
+                            "description": "List All Project Name.",
+                            "sub": {},
+                            "call": None
+                        }
+                    },
                     "call": __project_list__
                 },
                 "new": {
@@ -54,7 +117,7 @@ CMDS: dict[str, dict[str]] = {
                     },
                     "call": __project_new__
                 },
-                "del": {
+                "rem": {
                     "description": "Remove Project.",
                     "sub": {
                         "--name": {
@@ -63,7 +126,7 @@ CMDS: dict[str, dict[str]] = {
                             "call": None
                         }
                     },
-                    "call": __project_del__
+                    "call": __project_rem__
                 },
                 "modify": {
                     "description": "Modfiy Project.",
@@ -95,7 +158,13 @@ def Execute(params: str | list[str]):
                     msg=f"Unknow Command: tevm {" ".join(params)}",
                     help_level="error"
                 )
+        case "run":
+            __run__(params[1:])
+        case "recipe":
+            __recipe__(params[1:])
         case "project":
+            __project__(params[1:])
+        case "prj":
             __project__(params[1:])
         case _:
             __help__(
@@ -107,25 +176,125 @@ def __help__(
         msg: str | Literal["Unknow Command"] = None,
         help_params: list[str] = [],
         help_level: Literal["error", "warn", "info"] = "info"
-    ) -> str:
-    if help_level and help_level != "info":
-        print(help_level.upper(), end="\n\n")
+    ):
+    _cprint: Callable = None
+    match help_level:
+        case "error":
+            _cprint = CPrint.error
+        case "warn":
+            _cprint = CPrint.warn
+        case "info":
+            _cprint = CPrint.info
+        case _:
+            CPrint.error(f"A Non-Existent Help Level: {help_level}")
+            return
+
+    if not help_level == "info":
+        _cprint(help_level.upper(), end="\n")
 
     if msg:
-        print(msg, end="\n\n")
+        _cprint("    " + msg, end="\n\n")
     
     zCMDS = CMDS
     for key in help_params:
         zCMDS = zCMDS["sub"][key]
 
-    print(f'Command:\n    [tevm]{" " if help_params else ""}{" ".join(help_params)}: {zCMDS["description"]}')
+    CPrint.info(f'Command:\n    [tevm]{" " if help_params else ""}{" ".join(help_params)}: {zCMDS["description"]}')
 
     def PrintSub(zCMDS: dict, index: int = 2):
         for key in zCMDS["sub"]:
-            print(f'{"    " * index}[{key}]: {zCMDS["sub"][key]["description"]}')
+            CPrint.info(f'{"    " * index}[{key}]: {zCMDS["sub"][key]["description"]}')
             if zCMDS["sub"][key]["sub"]:
                 PrintSub(zCMDS["sub"][key], index+1)
     PrintSub(zCMDS)
+
+def __run__(params: list[str]):
+    if params.__len__() == 0:
+        __help__(
+            help_params=["run"],
+            help_level="info"
+        )
+        return
+    elif params.__len__() > 1:
+        __help__(
+            msg=f"Unknow Command: tevm run {" ".join(params)}",
+            help_params=["run"],
+            help_level="error"
+        )
+        return
+
+    Project_Name: str = params[0].lower()
+    if not Project_Name in PROJECTS:
+        CPrint.error(f"Project {Project_Name} Not Exists.")
+        return
+
+    Scripter.ps1(
+        project_name=Project_Name,
+        params=params[1:]
+    )
+    Scripter.run(cwd=Path_CallFrom)
+
+def __recipe__(params: list[str]):
+    if params.__len__() == 0:
+        __help__(
+            help_params=["recipe"],
+            help_level="info"
+        )
+        return
+
+    match params[0]:
+        case "run":
+            __recipe_run__(params[1:])
+        case "list":
+            __recipe_list__(params[1:])
+        case _:
+            __help__(
+                msg=f"Unknow Command: tevm recipe {" ".join(params)}",
+                help_params=["recipe"],
+                help_level="error"
+            )
+
+def __recipe_run__(params: list[str]):
+    if params.__len__() == 0:
+        __help__(
+            help_params=["recipe", "run"],
+            help_level="info"
+        )
+        return
+    elif params.__len__() > 1:
+        __help__(
+            msg=f"Unknow Command: tevm recipe run {" ".join(params)}",
+            help_params=["recipe", "run"],
+            help_level="error"
+        )
+        return
+    
+    recipe_name: str = params[0]
+    reciper: Reciper = Reciper()
+
+    if not recipe_name in reciper:
+        CPrint.error(f"\nRecipe {recipe_name} Not Exists.")
+        return
+    
+    result: Result = reciper.run(recipe_name)
+
+    if not result:
+        CPrint.failure(f"\nFailed To Run Recipe \"{recipe_name}\": [{result()}]")
+    else:
+        CPrint.success(f"\nSucceed To Run Recipe \"{recipe_name}\".")
+
+def __recipe_list__(params: list[str]):
+    if params.__len__() > 1 or (params and not params[0] in CMDS["sub"]["recipe"]["sub"]["list"]["sub"]):
+        __help__(
+            msg=f"Unknow Command: tevm recipe list {" ".join(params)}",
+            help_params=["recipe", "list"],
+            help_level="error"
+        )
+        return
+
+    reciper: Reciper = Reciper()
+    CPrint.info("\nTEVM Recipes List:")
+    CPrint.info(reciper.list(*params, beg="    "))
 
 def __project__(params: list[str]):
     if params.__len__() == 0:
@@ -141,8 +310,8 @@ def __project__(params: list[str]):
             __project_list__(params[1:])
         case "new":
             __project_new__(params[1:])
-        case "del":
-            __project_del__(params[1:])
+        case "rem":
+            __project_rem__(params[1:])
         case "modify":
             __project_modify__(params[1:])
         case _:
@@ -153,14 +322,13 @@ def __project__(params: list[str]):
             )
 
 def __project_gui__(params: list[str]):
+    CPrint.warn(f"This Features Has Not Been Realized Yet.")
+
     from ..gui import runGUI
-    __state__, _ = True, ""
     if params.__len__() == 0:
-        CP.print(f"This Features Has Not Been Realized Yet.")(CP.YELLOW); return
-        __state__, _ = runGUI()
+        runGUI()
     elif params.__len__() == 1 and params[0].lower() == "-debug":
-        CP.print(f"This Features Has Not Been Realized Yet.")(CP.YELLOW); return
-        __state__, _ = runGUI(debug=True)
+        runGUI(debug=True)
     else:
         __help__(
             msg=f"Unknow Command: tevm project gui {" ".join(params)}",
@@ -168,130 +336,151 @@ def __project_gui__(params: list[str]):
             help_level="error"
         )
 
-    if not __state__:
-        CP.print(_)(CP.RED)
-
 def __project_list__(params: list[str]):
-    if params.__len__() == 0:
-        from tevm.instance import Projects
-        print("TEVM Projects List:")
-        for ProjectName in Projects:
-            print("    " + ProjectName)
-    else:
+    if params.__len__() > 1 or (params and not params[0] in CMDS["sub"]["project"]["sub"]["list"]["sub"]):
         __help__(
-            msg=f"Unknow Command: tevm project gui {" ".join(params)}",
+            msg=f"Unknow Command: tevm project list {" ".join(params)}",
             help_params=["project", "list"],
             help_level="error"
         )
+        return
+    
+    CPrint.info("TEVM Projects List:")
+    CPrint.info(Projecter._list_(*params, beg="    "))
 
 def __project_new__(params: list[str]):
-    if params.__len__() > 1:
+    if params.__len__() != 1:
         __help__(
-            msg=f"Unknow Command: tevm project new {" ".join(params)}",
+            msg="Param Missing: Project Name Not Filled In." if params.__len__() == 0 else f"Unknow Command: tevm project new {" ".join(params)}",
             help_params=["project", "new"],
             help_level="error"
         )
         return
 
-    Project_Name: str = ""
-    Project_Data: dict = {
+    project_name = params[0].lower() if params.__len__() == 1 else ""
+    project_info: dict = {
         "executables": {},
-        "envars": {}
+        "envars": {},
+        "appendcmd": []
     }
 
-    # 项目名称
-    Project_Name = params[0].lower() if params.__len__() == 1 else ""
-    while 1:
-        if Project_Name == "":
-            Project_Name = input("Project Name: ").lower()
-        else:
-            print("Project Name: " + Project_Name)
-
-        if Project_Name in PROJECTS:
-            CP.print(f"Project {Project_Name} Is Already Exists.")(CP.YELLOW)
-            Project_Name = ""
-        elif not Project_Name.replace("_", "").isalnum():
-            CP.print("Project Name are only allowed to consist of underline, letters and numbers.")(CP.YELLOW)
-            Project_Name = ""
-        elif Project_Name.startswith("_") or Project_Name[0].isdigit():
-            CP.print("Project Name are only allowed to start with letters.")(CP.YELLOW)
-            Project_Name = ""
-        else:
-            break
+    # 项目名称检查
+    if not check_prjname(project_name):
+        CPrint.error("Project Name Only Allowed Contain ASCII Lowercase Letters \"[a-z]\" And Underscores \"_\".")
+        return
+    if project_name in PROJECTS:
+        CPrint.error(f"Project {project_name} Already Exists.") 
+        return
 
     # 可执行文件与执行参数
-    Executables: dict[str] = {}
-    Executable: str = ""
-    Executable_Params: str = ""
-    print("\nInput <N> To Finish.")
-    while 1:
+    info_exec: dict[str] = {}
+    keep_loop: bool = True
+    CPrint.info("Input <N> To Finish.\nInput Should Format As \"Executable File: Parameters\"")
+    while keep_loop:
         # 输入接收
-        Executable = input("Executable Path: ")
-        if Executable[0] == Executable[-1] in ("\"", "'") and Executable.__len__() > 1:
-            Executable = Executable[1:-1]
-
+        _input_: str | list[str] | None = input("\nExecutable & Param: ")
 
         # 结束输入检查
-        if Executable.lower() == "n" and input("Sure The Finish? (y/n)").lower() == "y":
-            if Executables:
-                break
+        if _input_.lower() == "n":
+            if not input("End Now? (y/n): ").lower() == "y":
+                continue
+            if info_exec:
+                keep_loop = False
+                continue
             else:
-                CP.print("Please Specify The Executable File.")(CP.YELLOW)
-        # 文件存在性校验
-        elif Path_Exists(Executable):
-            # 判断相对路径
-            if Path_IsABS(Executable):
-                Executable = Executable.replace("\\", "/")
-            else:
-                Executable = "rel|/" + Path_NormPath(Executable).replace("\\", "/")
-
-            # 设置可执行文件执行参数
-            Executable_Params = input("Which Parameters Does This Executable File Receive: ")
-
-            # 保存
-            Executables[Executable] = Executable_Params
+                CPrint.warn("Please Specify The Executable File.")
+                continue
         else:
-            CP.print(f"Executable Not Found. [{Executable}]")(CP.YELLOW)
-    CP.print("\nExecutables:")(CP.BLUE)
-    for Executable, Executable_Params in Executables.items():
-        CP.print(f"    {Executable}: {Executable_Params}")(CP.BLUE)
+            colon_index: int = _input_.find(":")
+
+        exec: str = (_input_ if colon_index == -1 else _input_[: colon_index]).strip()
+        param: str = "" if colon_index == -1 else _input_[colon_index+1: ].strip()
+
+        # 引号识别
+        if exec.__len__() > 2 and exec[0] == exec[-1] in ("\"", "'"):
+            exec = exec[1:-1]
+
+        # 文件存在性校验
+        if Path_Exists(exec):
+            # 判断相对路径并转换格式
+            if Path_IsABS(exec):
+                exec = exec.replace("\\", "/")
+            else:
+                exec = "rel|/" + Path_NormPath(exec).replace("\\", "/")
+        else:
+            CPrint.error(f"Executable File Not Exists. [{exec}]")
+            continue
+
+        info_exec[exec] = param
+    else:
+        CPrint.info("\nExecutables:")
+        for exec, param in info_exec.items():
+            CPrint.info(f"    {exec}: {param}")
 
     # 环境变量
-    Envars: dict = {}
-    Envar_Key: str = ""
-    Envar_Value: str = ""
-    print("\nInput <N> To Finish.")
-    while 1:
-        Envar_Key = input("Key Of Envar: ")
+    info_envar: dict = {}
+    keep_loop: bool = True
+    CPrint.info("\nInput <N> To Finish.\nInput Should Format As \"Key Of EnvVar: Value Of EnvVar\"")
+    while keep_loop:
+        _input_: str | list[str] | None = input("\nKey & Value: ")
 
-        if Envar_Key.lower() == "n" and input("Sure The Finish? (y/n)").lower() == "y":
-            break
-        elif Envar_Key == "":
-            CP.print("Please Specify The Envar Key.")(CP.YELLOW)
+        if _input_.lower() == "n":
+            if not input("End Now? (y/n)").lower() == "y":
+                continue
+            keep_loop = False
+            continue
+        elif _input_ == "":
+            CPrint.error("Please Specify The Key & Value.")
         else:
-            Envar_Value = input("Value Of Envar: ")
-            Envars[Envar_Key] = Envar_Value
-    CP.print("\nEnvars:")(CP.BLUE)
-    for Envar_Key, Envar_Value in Envars.items():
-        CP.print(f"    {Envar_Key}: {Envar_Value}")(CP.BLUE)
+            colon_index: int = _input_.find(":")
 
-    Project_Data["executables"] = Executables
-    Project_Data["envars"] = Envars
+        key: str = (_input_ if colon_index == -1 else _input_[: colon_index]).strip()
+        value: str = "" if colon_index == -1 else _input_[colon_index+1: ].strip()
+
+        info_envar[key] = value
+    else:
+        CPrint.info("\nEnvars:")
+        for key, value in info_envar.items():
+            CPrint.info(f"    \"{key}\": \"{value}\"")
+
+    # 附加指令
+    info_append_cmd: list[str] = []
+    keep_loop: bool = True
+    CPrint("\nInput <N> To Finish.")
+    while keep_loop:
+        _input_: str | list[str] | None = input("Command: ")
+
+        if _input_.lower() == "n":
+            if not input("Sure The Finish? (y/n)").lower() == "y":
+                continue
+            keep_loop = False
+            continue
+        elif _input_ == "":
+            continue
+        else:
+            info_append_cmd.append(_input_)
+    else:
+        CPrint.info("\nAppendCMD:")
+        for cmd in info_append_cmd:
+            CPrint.info(f"    {cmd}")
+
+    project_info["executables"] = info_exec
+    project_info["envars"] = info_envar
+    project_info["appendcmd"] = info_append_cmd
 
     # 写入配置文件
-    PROJECTS[Project_Name] = Project_Data
-    __state__, Projects = json_write(Path_ConfigProjects, PROJECTS)
-    if not __state__: print(Projects)
+    result: Result = Projecter._update_(project_name, project_info)
+    if not result: CPrint.failure(f"Failed To Create A New Project: [{result()}]")
 
     # 生成bat脚本
-    bat_build(Project_Name)
+    Scripter.bat(project_name)
 
-def __project_del__(params: list[str]):
+def __project_rem__(params: list[str]):
     Project_Name: str = ""
     match params.__len__():
         case 0:
             __help__(
-                help_params=["project", "del"],
+                help_params=["project", "rem"],
                 help_level="info"
             )
             return
@@ -299,21 +488,23 @@ def __project_del__(params: list[str]):
             Project_Name = params[0]
         case _:
             __help__(
-                msg=f"Unknow Command: tevm project del {" ".join(params)}",
-                help_params=["project", "del"],
+                msg=f"Unknow Command: tevm project rem {" ".join(params)}",
+                help_params=["project", "rem"],
                 help_level="error"
             )
             return
 
     if not Project_Name in PROJECTS:
-        CP.print(f"Project {Project_Name} Not Exists.")(CP.YELLOW)
+        CPrint.error(f"Project {Project_Name} Not Exists.")
     else:
-        os_remove(Root_BatScripts + "/" + Project_Name + ".bat")
+        file_remove(Root_BatScripts + "/" + Project_Name + ".bat")
         PROJECTS.pop(Project_Name)
-        __state__, Projects = json_write(Path_ConfigProjects, PROJECTS)
-        if not __state__: print(Projects)
+        result: Result = Json.write(Path_ConfigProjects, PROJECTS)
+        if not result: CPrint(result)
 
 def __project_modify__(params: list[str]):
+    CPrint.warn(f"This Features Has Not Been Realized Yet.")
+
     if params.__len__() == 0:
         __help__(
             help_params=["project", "modify"],
@@ -324,7 +515,7 @@ def __project_modify__(params: list[str]):
     Project_Name: str = params[0].lower()
 
     if not Project_Name in PROJECTS:
-        CP.print(f"Project {Project_Name} Not Exists.")(CP.YELLOW)
+        CPrint.error(f"Project {Project_Name} Not Exists.")
         return
 
 if __name__ == "__main__":

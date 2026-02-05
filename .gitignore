@@ -1,17 +1,17 @@
 .venv/
 .VSCodeCounter/
+backup/
 dist/
 projects/*
 release/
+src/lucas-lib/*
 src/tevm/site-packages/*
 temp/*
-tests/
+tests/*
 tools/*
+
 __pycache__/
 
 !tools/scripts/
 !.gitkeep
-
-asd asd as d    asd.txt
-
-/[<>?\/#]/
+!tests/CreateTests.py

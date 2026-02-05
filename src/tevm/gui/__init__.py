@@ -1,19 +1,18 @@
 from .api import api
+from pylucas.better_print import CPrint
 
 _api_ = api()
 
-def runGUI(debug: bool = False):
+def runGUI(debug: bool = False) -> None:
     from sys import path as sys_path
     from tevm.instance import Path_HTML, Root_Packages
 
     try:
-        __import__("webview")
-    except ImportError:
         sys_path.insert(0, Root_Packages)
-        try:
-            __import__("webview")
-        except ImportError:
-            return False, "The Dependency <pywebview> Not Installed Yet."
+        import webview
+    except ImportError:
+        CPrint.error("The Dependency <pywebview> Not Installed Yet.")
+        return
 
     from webview import create_window, start
 
@@ -31,5 +30,3 @@ def runGUI(debug: bool = False):
         debug=debug,
         icon=r"D:\User\Lucas\Desktop\256X256.ico"
     )
-
-    return True, None

@@ -3,6 +3,7 @@
         "executables": {
             "rel|/projects/python_standalone/python.exe": ""
         },
-        "envars": {}
+        "envars": {},
+        "appendcmd": []
     }
 }

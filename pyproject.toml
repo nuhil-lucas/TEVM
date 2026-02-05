@@ -10,7 +10,8 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "pywebview (>=6.1,<7.0)",
     "nuitka (>=2.8.6,<3.0.0)",
-    "pathspec (>=0.12.1,<0.13.0)"
+    "pathspec (>=0.12.1,<0.13.0)",
+    "pylucas @ file:///D:/Warehouse/Personal/Project/Program/Repositories/PyLucas/dist/pylucas-4.0.0b2602060420-py3-none-any.whl"
 ]
 
 [tool.poetry]
