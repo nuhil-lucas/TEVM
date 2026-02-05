@@ -12,6 +12,8 @@ tools/*
 
 __pycache__/
 
+poetry.lock
+
 !tools/scripts/
 !.gitkeep
 !tests/CreateTests.py
