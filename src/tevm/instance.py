@@ -46,6 +46,9 @@ except ImportError:
         print("Lucas-Lib 相关库加载失败, 尝试自动安装...")
         for Path_LucasLib in Path_LucasLibs:
             sp_run(args=["pip", "install", "--target", Root_LucasLib, Path_LucasLib], shell=True)
+        import pylucas
+    except ImportError:
+        print("Lucas-Lib 相关库自动安装成功， 但仍无法正常调用, 请尝试手动安装.")
     except Exception as E:
         print(E)
         print("Lucas-Lib 相关库自动安装失败, 请手动安装后重试.")
