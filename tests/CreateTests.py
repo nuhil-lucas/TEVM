@@ -26,6 +26,6 @@ def CreateTestsPY(TargetDir: str, Name: str = "Test", Type: str = ".py", Range: 
     print(f"总共创建 {CreateCount} 个测试脚本.")
 
 if __name__ == "__main__":
-    CreateTestsPY(TargetDir='./tests/JavaScript', Name="JS_Test", Type=".js", Range=10)
-    CreateTestsPY(TargetDir='./tests/Python', Name="Py_Test", Type=".py", Range=10)
-    CreateTestsPY(TargetDir='./tests/SQL', Name="SQL_Test", Type=".sql", Range=10)
+    # CreateTestsPY(TargetDir='./tests/JavaScript', Name="JS_Test", Type=".js", Range=10)
+    CreateTestsPY(TargetDir='./tests', Name="Py_Test", Type=".py", Range=10)
+    # CreateTestsPY(TargetDir='./tests/SQL', Name="SQL_Test", Type=".sql", Range=10)

@@ -5,7 +5,7 @@ from importlib.machinery import ModuleSpec
 from types import ModuleType
 from typing import Literal
 
-from ....instance import Path_CallFrom, Path_Python, Root_Recipes
+from tevm.instance import Instance
 from pylucas.basic import Result
 from pylucas.better_print import CPrint
 from .recipe import Recipe
@@ -20,11 +20,11 @@ class Reciper():
         self.load()
 
     def load(self):
-        for recipe in os_listdir(Root_Recipes):
+        for recipe in os_listdir(Instance.Root_Recipes):
             if not recipe.endswith(".py"): continue
             
             module_name: str = recipe[:-3]
-            module_path: str = Root_Recipes + "/" + recipe
+            module_path: str = Instance.Root_Recipes + "/" + recipe
 
             if not os_isfile(module_path): continue
 
@@ -73,8 +73,8 @@ class Reciper():
 def run_recipe(path_recipe: str, params: list[str] | str = ""):
     from subprocess import run as sp_run
     sp_run(
-        args=["powershell", "-Command", Path_Python, path_recipe].append("" if params == "" else "\"" + "\" \"".join(params) + "\""),
-        cwd=Path_CallFrom,
+        args=["powershell", "-Command", Instance.Path_Python, path_recipe].append("" if params == "" else "\"" + "\" \"".join(params) + "\""),
+        cwd=Instance.Root_CalledFrom,
         stdout=None,
         stderr=None
     )

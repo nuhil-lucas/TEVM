@@ -1,17 +1,21 @@
-from tevm.instance import Projects, Path_CallFrom, Params, SourceBat
+# Standard
+# Internal
+from tevm.instance import Instance
+from tevm.basic.func import sys_exit
+from tevm.cli import Execute
+from tevm.scripter import Scripter
+# External
+from pylucas.better_print import CPrint
 
-if SourceBat.lower()  == "tevm":
-    from tevm.cli import Execute
-    Execute(Params)
-elif SourceBat in Projects:
-    from tevm.lib.core import Scripter
+if Instance.Path_SourceBat.lower()  == "tevm":
+    Execute(Instance.Data_Params)
+elif Instance.Path_SourceBat in Instance.Data_Projects:
     Scripter.ps1(
-        project_name=SourceBat,
-        params=Params
+        prj_name=Instance.Path_SourceBat,
+        params=Instance.Data_Params
     )
-    Scripter.run(cwd=Path_CallFrom)
+    Scripter.run(cwd=Instance.Root_CalledFrom)
 else:
-    print(f"command {SourceBat} unfind in projects.")
+    CPrint.error(f"Command {Instance.Path_SourceBat} Unfind In Projects.")
 
-from tevm.lib.func import sys_exit
 sys_exit(0)

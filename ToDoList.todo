@@ -1,0 +1,5 @@
+[x] 1. 把 instance 的所有变量全都用静态类归集
+[x] 2. 把 原 lib 拆分, 使代码结构扁平化
+[ ] 3. 实现 prj modify 命令
+[ ] 4. 实现 reciper 特性
+[ ] 5. 实现 Web GUI

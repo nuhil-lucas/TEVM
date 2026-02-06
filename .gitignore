@@ -5,7 +5,7 @@ dist/
 projects/*
 release/
 src/lucas-lib/*
-src/tevm/site-packages/*
+src/site-packages/*
 temp/*
 tests/*
 tools/*

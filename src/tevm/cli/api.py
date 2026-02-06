@@ -1,23 +1,22 @@
+# Standard
 from typing import Literal, Callable
 from os.path import exists as Path_Exists, isabs as Path_IsABS, normpath as Path_NormPath
-from ..instance import (
-    Projects as PROJECTS,
-    Path_ConfigProjects,
-    Path_CallFrom,
-    Root_BatScripts,
-    # Path_Python,
-    # Root_TEVM,
-    # Root_Recipes
-)
-from ..lib.func import file_remove, check_prjname, input
-from ..lib.core import Projecter, Scripter, Reciper
-from ..lib import Json
+# Internal
+from tevm.instance import Instance
+from tevm.basic.func import file_remove, check_prjname, input
+from tevm.projecter import Projecter
+from tevm.scripter import Scripter
+from tevm.reciper import Reciper
+from tevm.basic import Json
+# External
 from pylucas.basic import Result
 from pylucas.better_print import CPrint
 
 def Execute(): pass
 def __help__(): pass
 def __run__(): pass
+def __env__(): pass
+def __env_show__(): pass
 def __recipe__(): pass
 def __recipe_run__(): pass
 def __recipe_list__(): pass
@@ -47,6 +46,17 @@ CMDS: dict[str, dict[str]] = {
                 }
             },
             "call": __run__
+        },
+        "env": {
+            "description": "Manage TEVMs EnVar.",
+            "sub": {
+                "show": {
+                    "description": "List All TEVM Instance Vars.",
+                    "sub": {},
+                    "call": __env_show__
+                }
+            },
+            "call": __env__
         },
         "recipe": {
             "description": "run the project.",
@@ -82,7 +92,7 @@ CMDS: dict[str, dict[str]] = {
             "call": __run__
         },
         "project": {
-            "description": "Project Projects With TEVM, Additionally, \"prj\" Is Also A Supported Command.",
+            "description": "Manager Projects With TEVM, Additionally, \"prj\" Is Also A Supported Command.",
             "sub": {
                 "gui": {
                     "description": "A Web GUI For User To Project.",
@@ -160,6 +170,8 @@ def Execute(params: str | list[str]):
                 )
         case "run":
             __run__(params[1:])
+        case "env":
+            __env__(params[1:])
         case "recipe":
             __recipe__(params[1:])
         case "project":
@@ -223,16 +235,47 @@ def __run__(params: list[str]):
         )
         return
 
-    Project_Name: str = params[0].lower()
-    if not Project_Name in PROJECTS:
-        CPrint.error(f"Project {Project_Name} Not Exists.")
+    prj_name: str = params[0].lower()
+    if not prj_name in Instance.Data_Projects:
+        CPrint.error(f"Project {prj_name} Not Exists.")
         return
 
     Scripter.ps1(
-        project_name=Project_Name,
+        prj_name=prj_name,
         params=params[1:]
     )
-    Scripter.run(cwd=Path_CallFrom)
+    Scripter.run(cwd=Instance.Root_CalledFrom)
+
+def __env__(params: list[str]):
+    if params.__len__() == 0:
+        __help__(
+            help_params=["env"],
+            help_level="info"
+        )
+        return
+
+    match params[0].lower():
+        case "show":
+            __env_list__(params[1:])
+        case _:
+            __help__(
+                msg=f"Unknow Command: tevm env {" ".join(params)}",
+                help_params=["env"],
+                help_level="error"
+            )
+
+def __env_list__(params: list[str]):
+    if params.__len__() > 1 or (params and not params[0] in CMDS["sub"]["env"]["sub"]["show"]["sub"]):
+        __help__(
+            msg=f"Unknow Command: tevm env show {" ".join(params)}",
+            help_params=["env", "show"],
+            help_level="error"
+        )
+        return
+
+    CPrint.info("TEVM Environment Variables:")
+    for key, value in Instance().items():
+        CPrint.info(f"    {key}:\n        {value}")
 
 def __recipe__(params: list[str]):
     if params.__len__() == 0:
@@ -303,6 +346,7 @@ def __project__(params: list[str]):
             help_level="info"
         )
         return
+
     match params[0].lower():
         case "gui":
             __project_gui__(params[1:])
@@ -368,7 +412,7 @@ def __project_new__(params: list[str]):
     if not check_prjname(project_name):
         CPrint.error("Project Name Only Allowed Contain ASCII Lowercase Letters \"[a-z]\" And Underscores \"_\".")
         return
-    if project_name in PROJECTS:
+    if project_name in Instance.Data_Projects:
         CPrint.error(f"Project {project_name} Already Exists.") 
         return
 
@@ -476,7 +520,7 @@ def __project_new__(params: list[str]):
     Scripter.bat(project_name)
 
 def __project_rem__(params: list[str]):
-    Project_Name: str = ""
+    prj_name: str = ""
     match params.__len__():
         case 0:
             __help__(
@@ -485,7 +529,7 @@ def __project_rem__(params: list[str]):
             )
             return
         case 1:
-            Project_Name = params[0]
+            prj_name = params[0]
         case _:
             __help__(
                 msg=f"Unknow Command: tevm project rem {" ".join(params)}",
@@ -494,12 +538,12 @@ def __project_rem__(params: list[str]):
             )
             return
 
-    if not Project_Name in PROJECTS:
-        CPrint.error(f"Project {Project_Name} Not Exists.")
+    if not prj_name in Instance.Data_Projects:
+        CPrint.error(f"Project {prj_name} Not Exists.")
     else:
-        file_remove(Root_BatScripts + "/" + Project_Name + ".bat")
-        PROJECTS.pop(Project_Name)
-        result: Result = Json.write(Path_ConfigProjects, PROJECTS)
+        file_remove(Instance.Root_BatScripts + "/" + prj_name + ".bat")
+        Instance.Data_Projects.pop(prj_name)
+        result: Result = Json.write(Instance.Path_ProjectsJson, Instance.Data_Projects)
         if not result: CPrint(result)
 
 def __project_modify__(params: list[str]):
@@ -512,10 +556,10 @@ def __project_modify__(params: list[str]):
         )
         return
 
-    Project_Name: str = params[0].lower()
+    prj_name: str = params[0].lower()
 
-    if not Project_Name in PROJECTS:
-        CPrint.error(f"Project {Project_Name} Not Exists.")
+    if not prj_name in Instance.Data_Projects:
+        CPrint.error(f"Project {prj_name} Not Exists.")
         return
 
 if __name__ == "__main__":
